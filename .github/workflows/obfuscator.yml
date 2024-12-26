@@ -1,33 +1,43 @@
-name: Obfuscate and Commit
+name: Obfuscate js
+
+permissions:
+  contents: write
 
 on:
-    push:
-        paths:
-            - '明文源码.js'
-    workflow_dispatch:
+  push:
+    paths:
+      - 明文源码.js # 根据变量定义的文件名，需要手动指定
+  workflow_dispatch:
 
 jobs:
-  obfuscate:
+  obfuscate_and_update_worker:
+    name: Obfuscate js
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
+    env:
+      SOURCE_FILE: 明文源码.js  # 原始 JavaScript 文件
+      OUTPUT_FILE: _worker.js   # 混淆后的输出文件
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      # 步骤 1: 检出仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Use Node.js
+      # 步骤 2: 设置 Node.js 环境
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "16"
+          node-version: 18
 
-      - name: Install dependencies
-        run: npm install -g javascript-obfuscator
-
-      - name: Obfuscate code
+      # 步骤 3: 安装混淆工具
+      - name: Install obfuscation tool
         run: |
-          javascript-obfuscator 明文源码.js --output _worker.js \
+          npm install -g javascript-obfuscator
+
+      # 步骤 4: 对 $SOURCE_FILE 进行混淆加密并生成 $OUTPUT_FILE
+      - name: Obfuscate ${{ env.SOURCE_FILE }}
+        run: |
+          javascript-obfuscator $SOURCE_FILE --output $OUTPUT_FILE \
           --compact true \
           --control-flow-flattening true \
           --control-flow-flattening-threshold 1 \
@@ -40,16 +50,19 @@ jobs:
           --string-array-threshold 1 \
           --transform-object-keys true \
           --unicode-escape-sequence true
+          echo "已生成混淆后的 $OUTPUT_FILE 文件"
 
-      - name: Commit changes
+      # 步骤 5: 检查 $OUTPUT_FILE 是否更新
+      - name: Check if ${{ env.OUTPUT_FILE }} is updated
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add _worker.js
-          git commit -m "Obfuscate _worker.js" || echo "No changes to commit"
+          git status
+          ls -l $OUTPUT_FILE
 
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+      # 步骤 6: 提交并推送更改
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add $OUTPUT_FILE
+          git commit -m "更新混淆后的 $OUTPUT_FILE 文件" || echo "无更改，跳过提交"
+          git push
