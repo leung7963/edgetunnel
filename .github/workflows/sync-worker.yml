@@ -1,0 +1,47 @@
+name: Upstream File Sync
+
+permissions:
+  contents: write
+
+on:
+  #schedule:
+    #- cron: "0 0 * * *" # 每天执行
+  workflow_dispatch:
+
+jobs:
+  sync_latest_from_upstream:
+    name: Sync specific file from upstream repo
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.fork }}
+    env:
+      FILE_TO_SYNC: _worker.js # 定义特定文件的全局变量
+
+    steps:
+      # 步骤 1: 检出目标仓库
+      - name: Checkout target repo
+        uses: actions/checkout@v3
+
+      # 步骤 2: 添加上游仓库为远程仓库
+      - name: Add upstream repo
+        run: |
+          git remote add upstream https://github.com/cmliu/edgetunnel.git
+          git fetch upstream
+
+      # 步骤 3: 强制覆盖或创建本地文件
+      - name: Force update or create file from upstream
+        run: |
+          git checkout upstream/main -- "$FILE_TO_SYNC" || true
+          echo "强制更新或新建本地文件 $FILE_TO_SYNC 完成"
+
+      # 步骤 4: 检查是否有更改并提交
+      - name: Commit changes
+        run: |
+          if ! git diff --quiet HEAD "$FILE_TO_SYNC"; then
+            git config --global user.name "GitHub Actions Bot"
+            git config --global user.email "actions@github.com"
+            git add "$FILE_TO_SYNC"
+            git commit -m "强制覆盖或更新 $FILE_TO_SYNC"
+            git push
+          else
+            echo "没有检测到文件更改，跳过提交"
+          fi
